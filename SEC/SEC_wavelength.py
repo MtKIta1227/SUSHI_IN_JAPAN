@@ -1,36 +1,43 @@
 import sys
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from PyQt5.QtWidgets import QApplication, QFileDialog, QDialog, QListWidget, QVBoxLayout, QPushButton, QMessageBox
 
+
 def load_data(filename):
-    """Function to load data from a file."""
-    data = np.loadtxt(filename, delimiter='\t', skiprows=1)
-    wavelengths = np.loadtxt(filename, delimiter='\t', max_rows=1, dtype=str)[1:]
+    """Load data in the same way as SEC_auto.py: skip header, whitespace-delimited, and construct time axis."""
+    # Skip the first 12 lines of non-data header, then read numeric data
+    df = pd.read_csv(filename, sep='\s+', skiprows=12, header=None)
+
+    # Define wavelength axis (200 nm to 700 nm at 1 nm increments)
+    wavelengths = np.arange(200, 701, 1).tolist()
+
+    # Construct time values (0 から 0.003333333 刻みで)
+    num_rows = len(df)
+    time_values = np.arange(0, 0.003333333 * num_rows, 0.003333333)[:num_rows]
+    df.insert(0, 'Time', time_values)
+
+    # Return list of wavelengths and raw data array (including time)
+    data = df.values
     return wavelengths, data
+
 
 def plot_data_for_wavelength(wavelengths, data, selected_wavelengths):
     """Function to plot data for specified wavelengths."""
-    time = data[:, 0]  # Convert time from milliseconds to minutes
+    time = data[:, 0]  # Time values in the first column
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10))
- 
+
     for wave in selected_wavelengths:
+        wave = float(wave)
         if wave in wavelengths:
-            idx = list(wavelengths).index(wave)
-            intensity = data[:, idx+1]
+            idx = wavelengths.index(wave)
+            intensity = data[:, idx + 1]
             normalized_intensity = intensity / np.max(intensity)
 
-            ax1.plot(time, intensity, label=f"{wave}nm")
-            ax2.plot(time, normalized_intensity, label=f"{wave}nm (Normalized)")
-
-            print(f"Wavelength: {wave}nm")
-            for t, i in zip(time, intensity):
-                print(f"Time: {t} minutes Intensity: {i}")
-            print("------")
-
-        else:
-            print(f"{wave}nm does not exist in the data")
+            ax1.plot(time, intensity, label=f"{wave} nm")
+            ax2.plot(time, normalized_intensity, label=f"{wave} nm (Normalized)")
 
     ax1.set_ylabel("Intensity")
     ax1.set_title("Intensity over Time for Selected Wavelengths")
@@ -40,16 +47,19 @@ def plot_data_for_wavelength(wavelengths, data, selected_wavelengths):
     ax2.set_ylabel("Normalized Intensity")
     ax2.set_title("Normalized Intensity over Time for Selected Wavelengths")
     ax2.legend()
+
     plt.tight_layout()
     plt.show()
 
+
 def select_file():
     options = QFileDialog.Options()
-    filename, _ = QFileDialog.getOpenFileName(None, "Please select a file", "", "Text Files (*.txt);;All Files (*)", options=options)
+    filename, _ = QFileDialog.getOpenFileName(None, "Please select file", "", "All Files (*)", options=options)
     if not filename:
         print("No file selected.")
         return None
     return filename
+
 
 class WavelengthSelectionDialog(QDialog):
     def __init__(self, wavelengths, data):
@@ -66,7 +76,7 @@ class WavelengthSelectionDialog(QDialog):
         self.list_widget = QListWidget()
         self.list_widget.setSelectionMode(QListWidget.MultiSelection)
         for wave in self.wavelengths:
-            self.list_widget.addItem(wave)
+            self.list_widget.addItem(str(int(wave)))
         self.layout.addWidget(self.list_widget)
 
         self.plot_button = QPushButton("Plot")
@@ -83,6 +93,7 @@ class WavelengthSelectionDialog(QDialog):
             return
         plot_data_for_wavelength(self.wavelengths, self.data, selected_wavelengths)
 
+
 def main():
     app = QApplication(sys.argv)
 
@@ -94,6 +105,7 @@ def main():
 
     dialog = WavelengthSelectionDialog(wavelengths, data)
     dialog.exec_()
+
 
 if __name__ == "__main__":
     main()
